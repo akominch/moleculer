@@ -12,6 +12,7 @@ const _ 					= require("lodash");
 const glob 					= require("glob");
 const path 					= require("path");
 const fs 					= require("fs");
+const chokidar = require("chokidar");
 
 const Transit 				= require("./transit");
 const Registry 				= require("./registry");
@@ -586,12 +587,14 @@ class ServiceBroker {
 
 			this.logger.debug(`Watching '${service.name}' service file...`);
 
-			// Better: https://github.com/paulmillr/chokidar
-			const watcher = fs.watch(service.__filename, (eventType, filename) => {
-				this.logger.info(`The ${filename} is changed. (Type: ${eventType})`);
+			const watcher = chokidar.watch(service.__filename, {
+				persistent: true,
+				disableGlobbing: true,
+			});
 
-				watcher.close();
-				debouncedHotReload(service);
+			watcher.on("change", (path) => {
+				this.logger.info(`The ${path} is changed. (Type: change)`);
+				watcher.close().then(() => debouncedHotReload(service));
 			});
 		}
 	}
