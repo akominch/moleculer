@@ -6,28 +6,27 @@
 
 "use strict";
 
-const Promise = require("bluebird");
-const EventEmitter2 = require("eventemitter2").EventEmitter2;
-const _ = require("lodash");
-const glob = require("glob");
-const path = require("path");
-const fs = require("fs");
-const chokidar = require("chokidar");
+const Promise 				= require("bluebird");
+const EventEmitter2 		= require("eventemitter2").EventEmitter2;
+const _ 					= require("lodash");
+const glob 					= require("glob");
+const path 					= require("path");
+const fs 					= require("fs");
 
-const Transit = require("./transit");
-const Registry = require("./registry");
-const E = require("./errors");
-const utils = require("./utils");
-const Logger = require("./logger");
-const Validator = require("./validator");
+const Transit 				= require("./transit");
+const Registry 				= require("./registry");
+const E 					= require("./errors");
+const utils 				= require("./utils");
+const Logger 				= require("./logger");
+const Validator 			= require("./validator");
 
-const Cachers = require("./cachers");
-const Transporters = require("./transporters");
-const Serializers = require("./serializers");
-const Middlewares = require("./middlewares");
-const H = require("./health");
-const MiddlewareHandler = require("./middleware");
-const cpuUsage = require("./cpu-usage");
+const Cachers 				= require("./cachers");
+const Transporters 			= require("./transporters");
+const Serializers 			= require("./serializers");
+const Middlewares			= require("./middlewares");
+const H 					= require("./health");
+const MiddlewareHandler		= require("./middleware");
+const cpuUsage 				= require("./cpu-usage");
 
 /**
  * Default broker options
@@ -50,7 +49,7 @@ const defaultOptions = {
 		delay: 100,
 		maxDelay: 1000,
 		factor: 2,
-		check: (err) => err && !!err.retryable,
+		check: err => err && !!err.retryable
 	},
 
 	maxCallLevel: 0,
@@ -66,7 +65,7 @@ const defaultOptions = {
 
 	registry: {
 		strategy: "RoundRobin",
-		preferLocal: true,
+		preferLocal: true
 	},
 
 	circuitBreaker: {
@@ -75,7 +74,7 @@ const defaultOptions = {
 		windowTime: 60,
 		minRequestCount: 20,
 		halfOpenTime: 10 * 1000,
-		check: (err) => err && err.code >= 500,
+		check: err => err && err.code >= 500
 	},
 
 	bulkhead: {
@@ -88,7 +87,7 @@ const defaultOptions = {
 		maxQueueSize: 50 * 1000, // 50k ~ 400MB,
 		packetLogFilter: [],
 		disableReconnect: false,
-		disableVersionCheck: false,
+		disableVersionCheck: false
 	},
 
 	cacher: null,
@@ -117,6 +116,7 @@ const defaultOptions = {
  * @class ServiceBroker
  */
 class ServiceBroker {
+
 	/**
 	 * Creates an instance of ServiceBroker.
 	 *
@@ -135,10 +135,8 @@ class ServiceBroker {
 			this.started = false;
 
 			// Class factories
-			this.ServiceFactory =
-				this.options.ServiceFactory || require("./service");
-			this.ContextFactory =
-				this.options.ContextFactory || require("./context");
+			this.ServiceFactory = this.options.ServiceFactory || require("./service");
+			this.ContextFactory = this.options.ContextFactory || require("./context");
 
 			// Namespace
 			this.namespace = this.options.namespace || "";
@@ -149,16 +147,14 @@ class ServiceBroker {
 			// Logger
 			this.logger = this.getLogger("broker");
 
-			this.logger.info(
-				`Moleculer v${this.MOLECULER_VERSION} is starting...`
-			);
+			this.logger.info(`Moleculer v${this.MOLECULER_VERSION} is starting...`);
 			this.logger.info(`Node ID: ${this.nodeID}`);
 			this.logger.info(`Namespace: ${this.namespace || "<not defined>"}`);
 
 			// Internal event bus
 			this.localBus = new EventEmitter2({
 				wildcard: true,
-				maxListeners: 100,
+				maxListeners: 100
 			});
 
 			// Internal maps
@@ -188,9 +184,7 @@ class ServiceBroker {
 
 			// Validation
 			if (this.options.validation !== false) {
-				this.validator = this.options.validator
-					? this.options.validator
-					: new Validator();
+				this.validator = this.options.validator ? this.options.validator : new Validator();
 				if (this.validator) {
 					this.validator.init(this);
 				}
@@ -206,13 +200,9 @@ class ServiceBroker {
 
 				if (this.options.disableBalancer) {
 					if (tx.hasBuiltInBalancer) {
-						this.logger.info(
-							"The broker built-in balancer is DISABLED."
-						);
+						this.logger.info("The broker built-in balancer is DISABLED.");
 					} else {
-						this.logger.warn(
-							`The ${txName} has no built-in balancer. Broker balancer is ENABLED.`
-						);
+						this.logger.warn(`The ${txName} has no built-in balancer. Broker balancer is ENABLED.`);
 						this.options.disableBalancer = false;
 					}
 				}
@@ -226,18 +216,20 @@ class ServiceBroker {
 			this.registerMiddlewares(this.options.middlewares);
 
 			// Register internal actions
-			if (this.options.internalServices) this.registerInternalServices();
+			if (this.options.internalServices)
+				this.registerInternalServices();
 
 			this.middlewares.callSyncHandlers("created", [this]);
 
 			// Call `created` event handler
-			if (_.isFunction(this.options.created)) this.options.created(this);
+			if (_.isFunction(this.options.created))
+				this.options.created(this);
 
 			// Graceful exit
 			this._closeFn = () => {
 				/* istanbul ignore next */
 				this.stop()
-					.catch((err) => this.logger.error(err))
+					.catch(err => this.logger.error(err))
 					.then(() => process.exit(0));
 			};
 
@@ -248,7 +240,7 @@ class ServiceBroker {
 				process.on("SIGINT", this._closeFn);
 				process.on("SIGTERM", this._closeFn);
 			}
-		} catch (err) {
+		} catch(err) {
 			if (this.logger)
 				this.fatal("Unable to create ServiceBroker.", err, true);
 			else {
@@ -256,6 +248,7 @@ class ServiceBroker {
 				console.error("Unable to create ServiceBroker.", err);
 			}
 		}
+
 	}
 
 	/**
@@ -266,11 +259,9 @@ class ServiceBroker {
 	registerMiddlewares(userMiddlewares) {
 		// Register user middlewares
 		if (Array.isArray(userMiddlewares) && userMiddlewares.length > 0) {
-			userMiddlewares.forEach((mw) => this.middlewares.add(mw));
+			userMiddlewares.forEach(mw => this.middlewares.add(mw));
 
-			this.logger.info(
-				`Registered ${this.middlewares.count()} custom middleware(s).`
-			);
+			this.logger.info(`Registered ${this.middlewares.count()} custom middleware(s).`);
 		}
 
 		if (this.options.internalMiddlewares) {
@@ -312,11 +303,7 @@ class ServiceBroker {
 			// 10. Metrics
 			this.middlewares.add(Middlewares.Metrics.call(this));
 
-			this.logger.info(
-				`Registered ${
-					this.middlewares.count() - prevCount
-				} internal middleware(s).`
-			);
+			this.logger.info(`Registered ${this.middlewares.count() - prevCount} internal middleware(s).`);
 		}
 
 		this.middlewares.wrapBrokerMethods();
@@ -333,29 +320,27 @@ class ServiceBroker {
 				return this.middlewares.callHandlers("starting", [this]);
 			})
 			.then(() => {
-				if (this.transit) return this.transit.connect();
+				if (this.transit)
+					return this.transit.connect();
 			})
 			.then(() => {
 				// Call service `started` handlers
-				return Promise.all(
-					this.services.map((svc) => svc._start.call(svc))
-				);
+				return Promise.all(this.services.map(svc => svc._start.call(svc)));
 			})
-			.catch((err) => {
+			.catch(err => {
 				/* istanbul ignore next */
 				this.logger.error("Unable to start all services.", err);
 				return Promise.reject(err);
 			})
 			.then(() => {
-				this.logger.info(
-					`ServiceBroker with ${this.services.length} service(s) is started successfully.`
-				);
+				this.logger.info(`ServiceBroker with ${this.services.length} service(s) is started successfully.`);
 				this.started = true;
 
 				this.broadcastLocal("$broker.started");
 			})
 			.then(() => {
-				if (this.transit) return this.transit.ready();
+				if (this.transit)
+					return this.transit.ready();
 			})
 			.then(() => {
 				return this.middlewares.callHandlers("started", [this]);
@@ -386,11 +371,9 @@ class ServiceBroker {
 			})
 			.then(() => {
 				// Call service `stopped` handlers
-				return Promise.all(
-					this.services.map((svc) => svc._stop.call(svc))
-				);
+				return Promise.all(this.services.map(svc => svc._stop.call(svc)));
 			})
-			.catch((err) => {
+			.catch(err => {
 				/* istanbul ignore next */
 				this.logger.error("Unable to stop all services.", err);
 			})
@@ -411,7 +394,7 @@ class ServiceBroker {
 				if (_.isFunction(this.options.stopped))
 					return this.options.stopped(this);
 			})
-			.catch((err) => {
+			.catch(err => {
 				/* istanbul ignore next */
 				this.logger.error(err);
 			})
@@ -420,10 +403,7 @@ class ServiceBroker {
 
 				this.broadcastLocal("$broker.stopped");
 
-				if (
-					(this.options.skipProcessEventRegistration || false) !==
-					true
-				) {
+				if ((this.options.skipProcessEventRegistration || false) !== true) {
 					process.removeListener("beforeExit", this._closeFn);
 					process.removeListener("exit", this._closeFn);
 					process.removeListener("SIGINT", this._closeFn);
@@ -444,18 +424,16 @@ class ServiceBroker {
 		let repl;
 		try {
 			repl = require("moleculer-repl");
-		} catch (error) {
-			console.error(
-				"The 'moleculer-repl' package is missing. Please install it with 'npm install moleculer-repl' command."
-			); // eslint-disable-line no-console
-			this.logger.error(
-				"The 'moleculer-repl' package is missing. Please install it with 'npm install moleculer-repl' command."
-			);
+		}
+		catch (error) {
+			console.error("The 'moleculer-repl' package is missing. Please install it with 'npm install moleculer-repl' command."); // eslint-disable-line no-console
+			this.logger.error("The 'moleculer-repl' package is missing. Please install it with 'npm install moleculer-repl' command.");
 			this.logger.debug("ERROR", error);
 			return;
 		}
 
-		if (repl) repl(this, this.options.replCommands);
+		if (repl)
+			repl(this, this.options.replCommands);
 	}
 
 	/**
@@ -468,16 +446,14 @@ class ServiceBroker {
 	 * @memberof ServiceBroker
 	 */
 	getLogger(module, props) {
-		if (_.isString(props)) props = { mod: props };
+		if (_.isString(props))
+			props = { mod: props };
 
-		let bindings = Object.assign(
-			{
-				nodeID: this.nodeID,
-				ns: this.namespace,
-				mod: module,
-			},
-			props
-		);
+		let bindings = Object.assign({
+			nodeID: this.nodeID,
+			ns: this.namespace,
+			mod: module
+		}, props);
 
 		// Call logger creator
 		if (_.isFunction(this.options.logger))
@@ -488,16 +464,11 @@ class ServiceBroker {
 			return Logger.extend(this.options.logger);
 
 		// Disable logging
-		if (this.options.logger === false) return Logger.createDefaultLogger();
+		if (this.options.logger === false)
+			return Logger.createDefaultLogger();
 
 		// Create console logger
-		return Logger.createDefaultLogger(
-			console,
-			bindings,
-			this.options.logLevel || "info",
-			this.options.logFormatter,
-			this.options.logObjectPrinter
-		);
+		return Logger.createDefaultLogger(console, bindings, this.options.logLevel || "info", this.options.logFormatter, this.options.logObjectPrinter);
 	}
 
 	/**
@@ -510,10 +481,14 @@ class ServiceBroker {
 	 * @memberof ServiceBroker
 	 */
 	fatal(message, err, needExit = true) {
-		if (this.logger) this.logger.fatal(message, err);
-		else console.error(message, err); // eslint-disable-line no-console
 
-		if (needExit) process.exit(1);
+		if (this.logger)
+			this.logger.fatal(message, err);
+		else
+			console.error(message, err); // eslint-disable-line no-console
+
+		if (needExit)
+			process.exit(1);
 	}
 
 	/**
@@ -531,11 +506,12 @@ class ServiceBroker {
 		let serviceFiles;
 
 		if (Array.isArray(fileMask))
-			serviceFiles = fileMask.map((f) => path.join(folder, f));
-		else serviceFiles = glob.sync(path.join(folder, fileMask));
+			serviceFiles = fileMask.map(f => path.join(folder, f));
+		else
+			serviceFiles = glob.sync(path.join(folder, fileMask));
 
 		if (serviceFiles)
-			serviceFiles.forEach((filename) => this.loadService(filename));
+			serviceFiles.forEach(filename => this.loadService(filename));
 
 		return serviceFiles.length;
 	}
@@ -568,7 +544,9 @@ class ServiceBroker {
 			svc = new schema(this);
 
 			// If broker is started, call the started lifecycle event of service
-			if (this.started) this._restartService(svc);
+			if (this.started)
+				this._restartService(svc);
+
 		} else if (_.isFunction(schema)) {
 			// Function
 			svc = schema(this);
@@ -576,8 +554,10 @@ class ServiceBroker {
 				svc = this.createService(svc);
 			} else {
 				// If broker is started, call the started lifecycle event of service
-				if (this.started) this._restartService(svc);
+				if (this.started)
+					this._restartService(svc);
 			}
+
 		} else if (schema) {
 			// Schema object
 			svc = this.createService(schema);
@@ -602,21 +582,16 @@ class ServiceBroker {
 	 */
 	watchService(service) {
 		if (service.__filename) {
-			const debouncedHotReload = _.debounce(
-				this.hotReloadService.bind(this),
-				500
-			);
+			const debouncedHotReload = _.debounce(this.hotReloadService.bind(this), 500);
 
 			this.logger.debug(`Watching '${service.name}' service file...`);
 
-			const watcher = chokidar.watch(service.__filename, {
-				persistent: true,
-				disableGlobbing: true,
-			});
+			// Better: https://github.com/paulmillr/chokidar
+			const watcher = fs.watch(service.__filename, (eventType, filename) => {
+				this.logger.info(`The ${filename} is changed. (Type: ${eventType})`);
 
-			watcher.on("change", (path) => {
-				this.logger.info(`The ${path} is changed. (Type: change)`);
-				watcher.close().then(() => debouncedHotReload(service));
+				watcher.close();
+				debouncedHotReload(service);
 			});
 		}
 	}
@@ -630,16 +605,12 @@ class ServiceBroker {
 	 * @memberof ServiceBroker
 	 */
 	hotReloadService(service) {
-		this.logger.info(
-			`Hot reload '${service.name}' service...`,
-			service.__filename
-		);
+		this.logger.info(`Hot reload '${service.name}' service...`, service.__filename);
 
 		utils.clearRequireCache(service.__filename);
 
-		return this.destroyService(service).then(() =>
-			this.loadService(service.__filename)
-		);
+		return this.destroyService(service)
+			.then(() => this.loadService(service.__filename));
 	}
 
 	/**
@@ -666,7 +637,8 @@ class ServiceBroker {
 		}
 
 		// If broker is started, call the started lifecycle event of service
-		if (this.started) this._restartService(service);
+		if (this.started)
+			this._restartService(service);
 
 		return service;
 	}
@@ -680,9 +652,8 @@ class ServiceBroker {
 	 * @private
 	 */
 	_restartService(service) {
-		return service._start
-			.call(service)
-			.catch((err) => this.logger.error("Unable to start service.", err));
+		return service._start.call(service)
+			.catch(err => this.logger.error("Unable to start service.", err));
 	}
 
 	/**
@@ -714,15 +685,12 @@ class ServiceBroker {
 	destroyService(service) {
 		return Promise.resolve()
 			.then(() => service._stop())
-			.catch((err) => {
+			.catch(err => {
 				/* istanbul ignore next */
-				this.logger.error(
-					`Unable to stop '${service.name}' service.`,
-					err
-				);
+				this.logger.error(`Unable to stop '${service.name}' service.`, err);
 			})
 			.then(() => {
-				_.remove(this.services, (svc) => svc == service);
+				_.remove(this.services, svc => svc == service);
 				this.registry.unregisterService(service.name, service.version);
 
 				this.logger.info(`Service '${service.name}' is stopped.`);
@@ -766,9 +734,7 @@ class ServiceBroker {
 	 * @memberof ServiceBroker
 	 */
 	getLocalService(name, version) {
-		return this.services.find(
-			(service) => service.name == name && service.version == version
-		);
+		return this.services.find(service => service.name == name && service.version == version);
 	}
 
 	/**
@@ -782,74 +748,54 @@ class ServiceBroker {
 	 * @memberof ServiceBroker
 	 */
 	waitForServices(serviceNames, timeout, interval, logger = this.logger) {
-		if (!Array.isArray(serviceNames)) serviceNames = [serviceNames];
+		if (!Array.isArray(serviceNames))
+			serviceNames = [serviceNames];
 
-		const serviceObjs = serviceNames
-			.map((x) => {
-				if (_.isPlainObject(x)) {
-					return x;
+		const serviceObjs = serviceNames.map(x => {
+			if (_.isPlainObject(x)) {
+				return x;
+			}
+
+			if (_.isString(x)) {
+				// Parse versioned service identifier strings
+				const split = x.split(".");
+				if (
+					split.length === 2 &&
+					split[0].length > 0 &&
+					split[0].match(/^v\d+$/)
+				) {
+					return {
+						name: split[1],
+						version: Number(split[0].slice(1)),
+					};
 				}
+				// If not versioned, fall back to the existing default action to hopefully avoid breaking existing implementations
+			}
 
-				if (_.isString(x)) {
-					// Parse versioned service identifier strings
-					const split = x.split(".");
-					if (
-						split.length === 2 &&
-						split[0].length > 0 &&
-						split[0].match(/^v\d+$/)
-					) {
-						return {
-							name: split[1],
-							version: Number(split[0].slice(1)),
-						};
-					}
-					// If not versioned, fall back to the existing default action to hopefully avoid breaking existing implementations
-				}
+			return { name: x };
+		}).filter(x => x.name);
 
-				return { name: x };
-			})
-			.filter((x) => x.name);
+		if (serviceObjs.length == 0)
+			return Promise.resolve();
 
-		if (serviceObjs.length == 0) return Promise.resolve();
-
-		logger.info(
-			`Waiting for service(s) '${_.map(serviceObjs, "name").join(
-				", "
-			)}'...`
-		);
+		logger.info(`Waiting for service(s) '${_.map(serviceObjs, "name").join(", ")}'...`);
 
 		const startTime = Date.now();
 		return new Promise((resolve, reject) => {
 			const check = () => {
-				const count = serviceObjs.filter((svcObj) => {
-					return this.registry.hasService(
-						svcObj.name,
-						svcObj.version
-					);
+				const count = serviceObjs.filter(svcObj => {
+					return this.registry.hasService(svcObj.name, svcObj.version);
 				});
 
 				if (count.length == serviceObjs.length) {
-					logger.info(
-						`Service(s) '${_.map(serviceObjs, "name").join(
-							", "
-						)}' are available.`
-					);
+					logger.info(`Service(s) '${_.map(serviceObjs, "name").join(", ")}' are available.`);
 					return resolve();
 				}
 
-				logger.debug(
-					`${count.length} of ${serviceObjs.length} services are available. Waiting further...`
-				);
+				logger.debug(`${count.length} of ${serviceObjs.length} services are available. Waiting further...`);
 
 				if (timeout && Date.now() - startTime > timeout)
-					return reject(
-						new E.MoleculerServerError(
-							"Services waiting is timed out.",
-							500,
-							"WAITFOR_SERVICES",
-							{ services: serviceNames }
-						)
-					);
+					return reject(new E.MoleculerServerError("Services waiting is timed out.", 500, "WAITFOR_SERVICES", { services: serviceNames }));
 
 				setTimeout(check, interval || 1000);
 			};
@@ -867,10 +813,8 @@ class ServiceBroker {
 	 * @memberof ServiceBroker
 	 */
 	use(...mws) {
-		utils.deprecate(
-			"The 'broker.use()' has been deprecated since v0.13. Use 'middlewares: [...]' in broker options instead."
-		);
-		mws.forEach((mw) => this.middlewares.add(mw));
+		utils.deprecate("The 'broker.use()' has been deprecated since v0.13. Use 'middlewares: [...]' in broker options instead.");
+		mws.forEach(mw => this.middlewares.add(mw));
 	}
 
 	/**
@@ -890,27 +834,18 @@ class ServiceBroker {
 			if (opts && opts.nodeID) {
 				const nodeID = opts.nodeID;
 				// Direct call
-				const endpoint = this.registry.getActionEndpointByNodeId(
-					actionName,
-					nodeID
-				);
+				const endpoint = this.registry.getActionEndpointByNodeId(actionName, nodeID);
 				if (!endpoint) {
-					this.logger.warn(
-						`Service '${actionName}' is not found on '${nodeID}' node.`
-					);
-					return new E.ServiceNotFoundError({
-						action: actionName,
-						nodeID,
-					});
+					this.logger.warn(`Service '${actionName}' is not found on '${nodeID}' node.`);
+					return new E.ServiceNotFoundError({ action: actionName, nodeID });
 				}
 				return endpoint;
+
 			} else {
 				// Get endpoint list by action name
 				const epList = this.registry.getActionEndpoints(actionName);
 				if (!epList) {
-					this.logger.warn(
-						`Service '${actionName}' is not registered.`
-					);
+					this.logger.warn(`Service '${actionName}' is not registered.`);
 					return new E.ServiceNotFoundError({ action: actionName });
 				}
 
@@ -919,9 +854,7 @@ class ServiceBroker {
 				if (!endpoint) {
 					const errMsg = `Service '${actionName}' is not available.`;
 					this.logger.warn(errMsg);
-					return new E.ServiceNotAvailableError({
-						action: actionName,
-					});
+					return new E.ServiceNotAvailableError({ action: actionName });
 				}
 				return endpoint;
 			}
@@ -941,7 +874,8 @@ class ServiceBroker {
 	 */
 	call(actionName, params, opts = {}) {
 		const endpoint = this.findNextActionEndpoint(actionName, opts);
-		if (endpoint instanceof Error) return Promise.reject(endpoint);
+		if (endpoint instanceof Error)
+			return Promise.reject(endpoint);
 
 		// Create context
 		let ctx;
@@ -957,16 +891,9 @@ class ServiceBroker {
 		}
 
 		if (ctx.endpoint.local)
-			this.logger.debug("Call action locally.", {
-				action: ctx.action.name,
-				requestID: ctx.requestID,
-			});
+			this.logger.debug("Call action locally.", { action: ctx.action.name, requestID: ctx.requestID });
 		else
-			this.logger.debug("Call action on remote node.", {
-				action: ctx.action.name,
-				nodeID: ctx.nodeID,
-				requestID: ctx.requestID,
-			});
+			this.logger.debug("Call action on remote node.", { action: ctx.action.name, nodeID: ctx.nodeID, requestID: ctx.requestID });
 
 		let p = endpoint.action.handler(ctx);
 
@@ -1000,40 +927,24 @@ class ServiceBroker {
 		} else {
 			if (opts.nodeID) {
 				nodeID = opts.nodeID;
-				endpoint = this.registry.getActionEndpointByNodeId(
-					actionName,
-					nodeID
-				);
+				endpoint = this.registry.getActionEndpointByNodeId(actionName, nodeID);
 				if (!endpoint) {
-					this.logger.warn(
-						`Service '${actionName}' is not found on '${nodeID}' node.`
-					);
-					return Promise.reject(
-						new E.ServiceNotFoundError({
-							action: actionName,
-							nodeID,
-						})
-					);
+					this.logger.warn(`Service '${actionName}' is not found on '${nodeID}' node.`);
+					return Promise.reject(new E.ServiceNotFoundError({ action: actionName, nodeID }));
 				}
 			} else {
 				// Get endpoint list by action name
 				const epList = this.registry.getActionEndpoints(actionName);
 				if (epList == null) {
-					this.logger.warn(
-						`Service '${actionName}' is not registered.`
-					);
-					return Promise.reject(
-						new E.ServiceNotFoundError({ action: actionName })
-					);
+					this.logger.warn(`Service '${actionName}' is not registered.`);
+					return Promise.reject(new E.ServiceNotFoundError({ action: actionName }));
 				}
 
 				endpoint = epList.getFirst();
 				if (endpoint == null) {
 					const errMsg = `Service '${actionName}' is not available.`;
 					this.logger.warn(errMsg);
-					return Promise.reject(
-						new E.ServiceNotAvailableError({ action: actionName })
-					);
+					return Promise.reject(new E.ServiceNotAvailableError({ action: actionName }));
 				}
 			}
 		}
@@ -1053,11 +964,7 @@ class ServiceBroker {
 		}
 		ctx.nodeID = nodeID;
 
-		this.logger.debug("Call action on a node.", {
-			action: ctx.action.name,
-			nodeID: ctx.nodeID,
-			requestID: ctx.requestID,
-		});
+		this.logger.debug("Call action on a node.", { action: ctx.action.name, nodeID: ctx.nodeID, requestID: ctx.requestID });
 
 		let p = endpoint.action.remoteHandler(ctx);
 
@@ -1071,25 +978,15 @@ class ServiceBroker {
 		// Find action by name
 		let epList = this.registry.getActionEndpoints(actionName);
 		if (epList == null || !epList.hasLocal()) {
-			this.logger.warn(
-				`Service '${actionName}' is not registered locally.`
-			);
-			throw new E.ServiceNotFoundError({
-				action: actionName,
-				nodeID: this.nodeID,
-			});
+			this.logger.warn(`Service '${actionName}' is not registered locally.`);
+			throw new E.ServiceNotFoundError({ action: actionName, nodeID: this.nodeID });
 		}
 
 		// Get local endpoint
 		let endpoint = epList.nextLocal();
 		if (!endpoint) {
-			this.logger.warn(
-				`Service '${actionName}' is not available locally.`
-			);
-			throw new E.ServiceNotAvailableError({
-				action: actionName,
-				nodeID: this.nodeID,
-			});
+			this.logger.warn(`Service '${actionName}' is not available locally.`);
+			throw new E.ServiceNotAvailableError({ action: actionName, nodeID: this.nodeID });
 		}
 
 		return endpoint;
@@ -1129,31 +1026,19 @@ class ServiceBroker {
 	 */
 	mcall(def) {
 		if (Array.isArray(def)) {
-			return Promise.all(
-				def.map((item) =>
-					this.call(item.action, item.params, item.options)
-				)
-			);
+			return Promise.all(def.map(item => this.call(item.action, item.params, item.options)));
+
 		} else if (_.isObject(def)) {
 			let results = {};
-			return Promise.all(
-				Object.keys(def).map((name) => {
-					const item = def[name];
-					return this.call(
-						item.action,
-						item.params,
-						item.options
-					).then((res) => (results[name] = res));
-				})
-			).then(() => results);
+			return Promise.all(Object.keys(def).map(name => {
+				const item = def[name];
+				return this.call(item.action, item.params, item.options).then(res => results[name] = res);
+			})).then(() => results);
 		} else {
-			throw new E.MoleculerServerError(
-				"Invalid calling definition.",
-				500,
-				"INVALID_PARAMETERS"
-			);
+			throw new E.MoleculerServerError("Invalid calling definition.", 500, "INVALID_PARAMETERS");
 		}
 	}
+
 
 	/**
 	 * Emit an event (grouped & balanced global event)
@@ -1166,22 +1051,18 @@ class ServiceBroker {
 	 * @memberof ServiceBroker
 	 */
 	emit(eventName, payload, groups) {
-		if (groups && !Array.isArray(groups)) groups = [groups];
+		if (groups && !Array.isArray(groups))
+			groups = [groups];
 
-		this.logger.debug(
-			`Emit '${eventName}' event` +
-				(groups ? ` to '${groups.join(", ")}' group(s)` : "") +
-				"."
-		);
+		this.logger.debug(`Emit '${eventName}' event`+ (groups ? ` to '${groups.join(", ")}' group(s)` : "") + ".");
 
 		// Call local/internal subscribers
-		if (/^\$/.test(eventName)) this.localBus.emit(eventName, payload);
+		if (/^\$/.test(eventName))
+			this.localBus.emit(eventName, payload);
 
 		if (!this.options.disableBalancer) {
-			const endpoints = this.registry.events.getBalancedEndpoints(
-				eventName,
-				groups
-			);
+
+			const endpoints = this.registry.events.getBalancedEndpoints(eventName, groups);
 
 			// Grouping remote events (reduce the network traffic)
 			const groupedEP = {};
@@ -1190,32 +1071,28 @@ class ServiceBroker {
 				if (ep) {
 					if (ep.id == this.nodeID) {
 						// Local service, call handler
-						this.registry.events.callEventHandler(
-							ep.event.handler,
-							payload,
-							this.nodeID,
-							eventName
-						);
+						this.registry.events.callEventHandler(ep.event.handler, payload, this.nodeID, eventName);
 					} else {
 						// Remote service
 						const e = groupedEP[ep.id];
-						if (e) e.push(group);
-						else groupedEP[ep.id] = [group];
+						if (e)
+							e.push(group);
+						else
+							groupedEP[ep.id] = [group];
 					}
 				} else {
-					if (groupedEP[null]) groupedEP[null].push(group);
-					else groupedEP[null] = [group];
+					if (groupedEP[null])
+						groupedEP[null].push(group);
+					else
+						groupedEP[null] = [group];
 				}
 			});
 
 			if (this.transit) {
 				// Remote service
-				return this.transit.sendBalancedEvent(
-					eventName,
-					payload,
-					groupedEP
-				);
+				return this.transit.sendBalancedEvent(eventName, payload, groupedEP);
 			}
+
 		} else if (this.transit) {
 			// Disabled balancer case
 
@@ -1224,7 +1101,8 @@ class ServiceBroker {
 				groups = this.getEventGroups(eventName);
 			}
 
-			if (groups.length == 0) return;
+			if (groups.length == 0)
+				return;
 
 			return this.transit.sendEventToGroups(eventName, payload, groups);
 		}
@@ -1241,30 +1119,19 @@ class ServiceBroker {
 	 * @memberof ServiceBroker
 	 */
 	broadcast(eventName, payload, groups = null) {
-		if (groups && !Array.isArray(groups)) groups = [groups];
+		if (groups && !Array.isArray(groups))
+			groups = [groups];
 
-		this.logger.debug(
-			`Broadcast '${eventName}' event` +
-				(groups ? ` to '${groups.join(", ")}' group(s)` : "") +
-				"."
-		);
+		this.logger.debug(`Broadcast '${eventName}' event`+ (groups ? ` to '${groups.join(", ")}' group(s)` : "") + ".");
 
 		if (this.transit) {
 			if (!this.options.disableBalancer) {
-				const endpoints = this.registry.events.getAllEndpoints(
-					eventName,
-					groups
-				);
+				const endpoints = this.registry.events.getAllEndpoints(eventName, groups);
 
 				// Send to remote services
-				endpoints.forEach((ep) => {
+				endpoints.forEach(ep => {
 					if (ep.id != this.nodeID) {
-						return this.transit.sendBroadcastEvent(
-							ep.id,
-							eventName,
-							payload,
-							groups
-						);
+						return this.transit.sendBroadcastEvent(ep.id, eventName, payload, groups);
 					}
 				});
 			} else {
@@ -1274,14 +1141,10 @@ class ServiceBroker {
 					groups = this.getEventGroups(eventName);
 				}
 
-				if (groups.length == 0) return;
+				if (groups.length == 0)
+					return;
 
-				return this.transit.sendBroadcastEvent(
-					null,
-					eventName,
-					payload,
-					groups
-				);
+				return this.transit.sendBroadcastEvent(null, eventName, payload, groups);
 			}
 		}
 
@@ -1301,24 +1164,16 @@ class ServiceBroker {
 	 * @memberof ServiceBroker
 	 */
 	broadcastLocal(eventName, payload, groups = null) {
-		if (groups && !Array.isArray(groups)) groups = [groups];
+		if (groups && !Array.isArray(groups))
+			groups = [groups];
 
-		this.logger.debug(
-			`Broadcast '${eventName}' local event` +
-				(groups ? ` to '${groups.join(", ")}' group(s)` : "") +
-				"."
-		);
+		this.logger.debug(`Broadcast '${eventName}' local event`+ (groups ? ` to '${groups.join(", ")}' group(s)` : "") + ".");
 
 		// Call internal subscribers
-		if (/^\$/.test(eventName)) this.localBus.emit(eventName, payload);
+		if (/^\$/.test(eventName))
+			this.localBus.emit(eventName, payload);
 
-		return this.emitLocalServices(
-			eventName,
-			payload,
-			groups,
-			this.nodeID,
-			true
-		);
+		return this.emitLocalServices(eventName, payload, groups, this.nodeID, true);
 	}
 
 	/**
@@ -1333,13 +1188,14 @@ class ServiceBroker {
 		if (this.transit && this.transit.connected) {
 			if (_.isString(nodeID)) {
 				// Ping a single node
-				return new Promise((resolve) => {
+				return new Promise(resolve => {
+
 					const timer = setTimeout(() => {
 						this.localBus.off("$node.pong", handler);
 						resolve(null);
 					}, timeout);
 
-					const handler = (pong) => {
+					const handler = pong => {
 						if (pong.nodeID == nodeID) {
 							clearTimeout(timer);
 							this.localBus.off("$node.pong", handler);
@@ -1351,27 +1207,28 @@ class ServiceBroker {
 
 					this.transit.sendPing(nodeID);
 				});
+
 			} else {
 				const pongs = {};
 				let nodes = nodeID;
 				if (!nodes) {
-					nodes = this.registry
-						.getNodeList({ onlyAvailable: true })
-						.filter((node) => node.id != this.nodeID)
-						.map((node) => node.id);
+					nodes = this.registry.getNodeList({ onlyAvailable: true })
+						.filter(node => node.id != this.nodeID)
+						.map(node => node.id);
 				}
 
-				nodes.forEach((id) => (pongs[id] = null));
+				nodes.forEach(id => pongs[id] = null);
 				const processing = new Set(nodes);
 
 				// Ping multiple nodes
-				return new Promise((resolve) => {
+				return new Promise(resolve => {
+
 					const timer = setTimeout(() => {
 						this.localBus.off("$node.pong", handler);
 						resolve(pongs);
 					}, timeout);
 
-					const handler = (pong) => {
+					const handler = pong => {
 						pongs[pong.nodeID] = pong;
 						processing.delete(pong.nodeID);
 
@@ -1384,7 +1241,7 @@ class ServiceBroker {
 
 					this.localBus.on("$node.pong", handler);
 
-					nodes.forEach((id) => this.transit.sendPing(id));
+					nodes.forEach(id => this.transit.sendPing(id));
 				});
 			}
 		}
@@ -1436,13 +1293,7 @@ class ServiceBroker {
 	 * @memberof ServiceBroker
 	 */
 	emitLocalServices(event, payload, groups, sender, broadcast) {
-		return this.registry.events.emitLocalServices(
-			event,
-			payload,
-			groups,
-			sender,
-			broadcast
-		);
+		return this.registry.events.emitLocalServices(event, payload, groups, sender, broadcast);
 	}
 
 	/**
@@ -1455,6 +1306,7 @@ class ServiceBroker {
 		return cpuUsage();
 	}
 
+
 	/**
 	 * Get the Constructor name of any object if it exists
 	 * @param {any} obj
@@ -1463,10 +1315,10 @@ class ServiceBroker {
 	 */
 	getConstructorName(obj) {
 		let target = obj.prototype;
-		if (target && target.constructor && target.constructor.name) {
+		if (target && target.constructor && target.constructor.name){
 			return target.constructor.name;
 		}
-		if (obj.constructor && obj.constructor.name) {
+		if (obj.constructor && obj.constructor.name){
 			return obj.constructor.name;
 		}
 		return undefined;
@@ -1480,7 +1332,7 @@ class ServiceBroker {
 	 *
 	 */
 	normalizeSchemaConstructor(schema) {
-		if (this.ServiceFactory.isPrototypeOf(schema)) {
+		if (this.ServiceFactory.isPrototypeOf(schema)){
 			return schema;
 		}
 		// Sometimes the schame was loaded from another node_module or is a object copy.
@@ -1488,20 +1340,20 @@ class ServiceBroker {
 		// and adjust the prototype of the schema.
 		let serviceName = this.getConstructorName(this.ServiceFactory);
 		let target = this.getConstructorName(schema);
-		if (serviceName === target) {
+		if (serviceName === target){
 			Object.setPrototypeOf(schema, this.ServiceFactory);
 			return schema;
 		}
 		// Depending how the schema was create the correct constructor name (from base class) will be locate on __proto__.
 		target = this.getConstructorName(schema.__proto__);
-		if (serviceName === target) {
+		if (serviceName === target){
 			Object.setPrototypeOf(schema.__proto__, this.ServiceFactory);
 			return schema;
 		}
 		// This is just to handle some idiosyncrasies from Jest.
-		if (schema._isMockFunction) {
+		if (schema._isMockFunction){
 			target = this.getConstructorName(schema.prototype.__proto__);
-			if (serviceName === target) {
+			if (serviceName === target){
 				Object.setPrototypeOf(schema, this.ServiceFactory);
 				return schema;
 			}
